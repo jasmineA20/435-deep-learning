@@ -1,247 +1,205 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": 1,
-   "id": "149cdffb",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import autograd.numpy as np\n",
-    "\n",
-    "class Setup:\n",
-    "    def __init__(self,**kwargs):        \n",
-    "        # set default values for layer sizes, activation, and scale\n",
-    "        activation = 'relu'\n",
-    "\n",
-    "        # decide on these parameters via user input\n",
-    "        if 'activation' in kwargs:\n",
-    "            activation = kwargs['activation']\n",
-    "\n",
-    "        # switches\n",
-    "        if activation == 'linear':\n",
-    "            self.activation = lambda data: data\n",
-    "        elif activation == 'tanh':\n",
-    "            self.activation = lambda data: np.tanh(data)\n",
-    "        elif activation == 'relu':\n",
-    "            self.activation = lambda data: np.maximum(0,data)\n",
-    "        elif activation == 'sinc':\n",
-    "            self.activation = lambda data: np.sinc(data)\n",
-    "        elif activation == 'sin':\n",
-    "            self.activation = lambda data: np.sin(data)\n",
-    "        elif activation == 'maxout':\n",
-    "            self.activation = lambda data1,data2: np.maximum(data1,data2)\n",
-    "                        \n",
-    "        # get layer sizes\n",
-    "        layer_sizes = kwargs['layer_sizes']\n",
-    "        self.layer_sizes = layer_sizes\n",
-    "        self.scale = 0.1\n",
-    "        if 'scale' in kwargs:\n",
-    "            self.scale = kwargs['scale']\n",
-    "            \n",
-    "        # assign initializer / feature transforms function\n",
-    "        if activation == 'linear' or activation == 'tanh' or activation == 'relu' or activation == 'sinc' or activation == 'sin':\n",
-    "            self.initializer = self.standard_initializer\n",
-    "            self.feature_transforms = self.standard_feature_transforms\n",
-    "            self.testing_feature_transforms = self.standard_feature_transforms_testing\n",
-    "        elif activation == 'maxout':\n",
-    "            self.initializer = self.maxout_initializer\n",
-    "            self.feature_transforms = self.maxout_feature_transforms\n",
-    "            self.testing_feature_transforms = self.maxout_feature_transforms_testing\n",
-    "\n",
-    "    ####### initializers ######\n",
-    "    # create initial weights for arbitrary feedforward network\n",
-    "    def standard_initializer(self):\n",
-    "        # container for entire weight tensor\n",
-    "        weights = []\n",
-    "\n",
-    "        # loop over desired layer sizes and create appropriately sized initial \n",
-    "        # weight matrix for each layer\n",
-    "        for k in range(len(self.layer_sizes)-1):\n",
-    "            # get layer sizes for current weight matrix\n",
-    "            U_k = self.layer_sizes[k]\n",
-    "            U_k_plus_1 = self.layer_sizes[k+1]\n",
-    "\n",
-    "            # make weight matrix\n",
-    "            weight = self.scale*np.random.randn(U_k+1,U_k_plus_1)\n",
-    "            weights.append(weight)\n",
-    "\n",
-    "        # re-express weights so that w_init[0] = omega_inner contains all \n",
-    "        # internal weight matrices, and w_init = w contains weights of \n",
-    "        # final linear combination in predict function\n",
-    "        w_init = [weights[:-1],weights[-1]]\n",
-    "\n",
-    "        return w_init\n",
-    "    \n",
-    "    # create initial weights for arbitrary feedforward network\n",
-    "    def maxout_initializer(self):\n",
-    "        # container for entire weight tensor\n",
-    "        weights = []\n",
-    "\n",
-    "        # loop over desired layer sizes and create appropriately sized initial \n",
-    "        # weight matrix for each layer\n",
-    "        for k in range(len(self.layer_sizes)-1):\n",
-    "            # get layer sizes for current weight matrix\n",
-    "            U_k = self.layer_sizes[k]\n",
-    "            U_k_plus_1 = self.layer_sizes[k+1]\n",
-    "\n",
-    "            # make weight matrix\n",
-    "            weight1 = self.scale*np.random.randn(U_k + 1,U_k_plus_1)\n",
-    "\n",
-    "            # add second matrix for inner weights\n",
-    "            if k < len(self.layer_sizes)-2:\n",
-    "                weight2 = self.scale*np.random.randn(U_k + 1,U_k_plus_1)\n",
-    "                weights.append([weight1,weight2])\n",
-    "            else:\n",
-    "                weights.append(weight1)\n",
-    "\n",
-    "        # re-express weights so that w_init[0] = omega_inner contains all \n",
-    "        # internal weight matrices, and w_init = w contains weights of \n",
-    "        # final linear combination in predict function\n",
-    "        w_init = [weights[:-1],weights[-1]]\n",
-    "\n",
-    "        return w_init\n",
-    "\n",
-    "    # standard normalization function \n",
-    "    def standard_normalizer(self,x):\n",
-    "        # compute the mean and standard deviation of the input\n",
-    "        x_means = np.mean(x,axis = 1)[:,np.newaxis]\n",
-    "        x_stds = np.std(x,axis = 1)[:,np.newaxis]   \n",
-    "\n",
-    "        # check to make sure thta x_stds > small threshold, for those not\n",
-    "        # divide by 1 instead of original standard deviation\n",
-    "        ind = np.argwhere(x_stds < 10**(-2))\n",
-    "        if len(ind) > 0:\n",
-    "            ind = [v[0] for v in ind]\n",
-    "            adjust = np.zeros((x_stds.shape))\n",
-    "            adjust[ind] = 1.0\n",
-    "            x_stds += adjust\n",
-    "\n",
-    "        # create standard normalizer function\n",
-    "        normalizer = lambda data: (data - x_means)/x_stds\n",
-    "\n",
-    "        # return normalizer \n",
-    "        return normalizer\n",
-    "    \n",
-    "    ####### feature transforms ######\n",
-    "    # a multilayer perceptron network, note the input w is a tensor of weights, with \n",
-    "    # activation output normalization\n",
-    "    def standard_feature_transforms(self,a, w):    \n",
-    "        # loop through each layer matrix\n",
-    "        self.normalizers = []\n",
-    "        for W in w:\n",
-    "            # compute inner product with current layer weights\n",
-    "            a = W[0] + np.dot(a.T, W[1:])\n",
-    "\n",
-    "            # output of layer activation\n",
-    "            a = self.activation(a).T\n",
-    "\n",
-    "            # NEW - perform standard normalization to the activation outputs\n",
-    "            normalizer = self.standard_normalizer(a)\n",
-    "            a = normalizer(a)\n",
-    "            \n",
-    "            # store normalizer for testing data\n",
-    "            self.normalizers.append(normalizer)\n",
-    "        return a\n",
-    "    \n",
-    "    # a multilayer perceptron network, note the input w is a tensor of weights, with \n",
-    "    # activation output normalization\n",
-    "    def maxout_feature_transforms(self,a, w):    \n",
-    "        # loop through each layer matrix\n",
-    "        self.normalizers = []\n",
-    "        for W1,W2 in w:\n",
-    "            # compute inner product with current layer weights\n",
-    "            a1 = W1[0][:,np.newaxis] + np.dot(a.T, W1[1:])\n",
-    "            a2 = W2[0][:,np.newaxis] + np.dot(a.T, W2[1:])\n",
-    "\n",
-    "            # output of layer activation\n",
-    "            a = self.activation(a1,a2).T\n",
-    "\n",
-    "            # NEW - perform standard normalization to the activation outputs\n",
-    "            normalizer = self.standard_normalizer(a)\n",
-    "            a = normalizer(a)\n",
-    "            \n",
-    "            # store normalizer for testing data\n",
-    "            self.normalizers.append(normalizer)\n",
-    "        return a\n",
-    "    \n",
-    "    #### testing side feature transforms ####\n",
-    "    # a copy of the batch normalized architecture that employs normalizers\n",
-    "    # at each layer based on statistics from training data and user-chosen\n",
-    "    # choice of weights w\n",
-    "    def standard_feature_transforms_testing(self,a, w):    \n",
-    "        # loop through each layer matrix\n",
-    "        c=0\n",
-    "        for W in w:\n",
-    "            #  pad with ones (to compactly take care of bias) for next layer computation        \n",
-    "            o = np.ones((1,np.shape(a)[1]))\n",
-    "            a = np.vstack((o,a))\n",
-    "\n",
-    "            # compute linear combination of current layer units\n",
-    "            a = np.dot(a.T, W).T\n",
-    "\n",
-    "            # pass through activation\n",
-    "            a = self.activation(a)\n",
-    "\n",
-    "            # get normalizer for this layer tuned to training data\n",
-    "            normalizer = self.normalizers[c]\n",
-    "            a = normalizer(a)\n",
-    "            c+=1\n",
-    "        return a\n",
-    "    \n",
-    "    # a copy of the batch normalized architecture that employs normalizers\n",
-    "    # at each layer based on statistics from training data and user-chosen\n",
-    "    # choice of weights w\n",
-    "    def maxout_feature_transforms_testing(self,a, w):    \n",
-    "        # loop through each layer matrix\n",
-    "        c=0\n",
-    "        for W1,W2 in w:\n",
-    "            #  pad with ones (to compactly take care of bias) for next layer computation        \n",
-    "            o = np.ones((1,np.shape(a)[1]))\n",
-    "            a = np.vstack((o,a))\n",
-    "\n",
-    "            # compute linear combination of current layer units\n",
-    "            a1 = np.dot(a.T, W1).T\n",
-    "            a2 = np.dot(a.T, W2).T\n",
-    "\n",
-    "            # pass through activation\n",
-    "            a = self.activation(a1,a2)\n",
-    "\n",
-    "            # get normalizer for this layer tuned to training data\n",
-    "            normalizer = self.normalizers[c]\n",
-    "            a = normalizer(a)\n",
-    "            c+=1\n",
-    "        return a"
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "23fb3f00",
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.9.12"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+import autograd.numpy as np
+
+class Setup:
+    def __init__(self,**kwargs):        
+        # set default values for layer sizes, activation, and scale
+        activation = 'relu'
+
+        # decide on these parameters via user input
+        if 'activation' in kwargs:
+            activation = kwargs['activation']
+
+        # switches
+        if activation == 'linear':
+            self.activation = lambda data: data
+        elif activation == 'tanh':
+            self.activation = lambda data: np.tanh(data)
+        elif activation == 'relu':
+            self.activation = lambda data: np.maximum(0,data)
+        elif activation == 'sinc':
+            self.activation = lambda data: np.sinc(data)
+        elif activation == 'sin':
+            self.activation = lambda data: np.sin(data)
+        elif activation == 'maxout':
+            self.activation = lambda data1,data2: np.maximum(data1,data2)
+                        
+        # get layer sizes
+        layer_sizes = kwargs['layer_sizes']
+        self.layer_sizes = layer_sizes
+        self.scale = 0.1
+        if 'scale' in kwargs:
+            self.scale = kwargs['scale']
+            
+        # assign initializer / feature transforms function
+        if activation == 'linear' or activation == 'tanh' or activation == 'relu' or activation == 'sinc' or activation == 'sin':
+            self.initializer = self.standard_initializer
+            self.feature_transforms = self.standard_feature_transforms
+            self.testing_feature_transforms = self.standard_feature_transforms_testing
+        elif activation == 'maxout':
+            self.initializer = self.maxout_initializer
+            self.feature_transforms = self.maxout_feature_transforms
+            self.testing_feature_transforms = self.maxout_feature_transforms_testing
+
+    ####### initializers ######
+    # create initial weights for arbitrary feedforward network
+    def standard_initializer(self):
+        # container for entire weight tensor
+        weights = []
+
+        # loop over desired layer sizes and create appropriately sized initial 
+        # weight matrix for each layer
+        for k in range(len(self.layer_sizes)-1):
+            # get layer sizes for current weight matrix
+            U_k = self.layer_sizes[k]
+            U_k_plus_1 = self.layer_sizes[k+1]
+
+            # make weight matrix
+            weight = self.scale*np.random.randn(U_k+1,U_k_plus_1)
+            weights.append(weight)
+
+        # re-express weights so that w_init[0] = omega_inner contains all 
+        # internal weight matrices, and w_init = w contains weights of 
+        # final linear combination in predict function
+        w_init = [weights[:-1],weights[-1]]
+
+        return w_init
+    
+    # create initial weights for arbitrary feedforward network
+    def maxout_initializer(self):
+        # container for entire weight tensor
+        weights = []
+
+        # loop over desired layer sizes and create appropriately sized initial 
+        # weight matrix for each layer
+        for k in range(len(self.layer_sizes)-1):
+            # get layer sizes for current weight matrix
+            U_k = self.layer_sizes[k]
+            U_k_plus_1 = self.layer_sizes[k+1]
+
+            # make weight matrix
+            weight1 = self.scale*np.random.randn(U_k + 1,U_k_plus_1)
+
+            # add second matrix for inner weights
+            if k < len(self.layer_sizes)-2:
+                weight2 = self.scale*np.random.randn(U_k + 1,U_k_plus_1)
+                weights.append([weight1,weight2])
+            else:
+                weights.append(weight1)
+
+        # re-express weights so that w_init[0] = omega_inner contains all 
+        # internal weight matrices, and w_init = w contains weights of 
+        # final linear combination in predict function
+        w_init = [weights[:-1],weights[-1]]
+
+        return w_init
+
+    # standard normalization function 
+    def standard_normalizer(self,x):
+        # compute the mean and standard deviation of the input
+        x_means = np.mean(x,axis = 1)[:,np.newaxis]
+        x_stds = np.std(x,axis = 1)[:,np.newaxis]   
+
+        # check to make sure thta x_stds > small threshold, for those not
+        # divide by 1 instead of original standard deviation
+        ind = np.argwhere(x_stds < 10**(-2))
+        if len(ind) > 0:
+            ind = [v[0] for v in ind]
+            adjust = np.zeros((x_stds.shape))
+            adjust[ind] = 1.0
+            x_stds += adjust
+
+        # create standard normalizer function
+        normalizer = lambda data: (data - x_means)/x_stds
+
+        # return normalizer 
+        return normalizer
+    
+    ####### feature transforms ######
+    # a multilayer perceptron network, note the input w is a tensor of weights, with 
+    # activation output normalization
+    def standard_feature_transforms(self,a, w):    
+        # loop through each layer matrix
+        self.normalizers = []
+        for W in w:
+            # compute inner product with current layer weights
+            a = W[0] + np.dot(a.T, W[1:])
+
+            # output of layer activation
+            a = self.activation(a).T
+
+            # NEW - perform standard normalization to the activation outputs
+            normalizer = self.standard_normalizer(a)
+            a = normalizer(a)
+            
+            # store normalizer for testing data
+            self.normalizers.append(normalizer)
+        return a
+    
+    # a multilayer perceptron network, note the input w is a tensor of weights, with 
+    # activation output normalization
+    def maxout_feature_transforms(self,a, w):    
+        # loop through each layer matrix
+        self.normalizers = []
+        for W1,W2 in w:
+            # compute inner product with current layer weights
+            a1 = W1[0][:,np.newaxis] + np.dot(a.T, W1[1:])
+            a2 = W2[0][:,np.newaxis] + np.dot(a.T, W2[1:])
+
+            # output of layer activation
+            a = self.activation(a1,a2).T
+
+            # NEW - perform standard normalization to the activation outputs
+            normalizer = self.standard_normalizer(a)
+            a = normalizer(a)
+            
+            # store normalizer for testing data
+            self.normalizers.append(normalizer)
+        return a
+    
+    #### testing side feature transforms ####
+    # a copy of the batch normalized architecture that employs normalizers
+    # at each layer based on statistics from training data and user-chosen
+    # choice of weights w
+    def standard_feature_transforms_testing(self,a, w):    
+        # loop through each layer matrix
+        c=0
+        for W in w:
+            #  pad with ones (to compactly take care of bias) for next layer computation        
+            o = np.ones((1,np.shape(a)[1]))
+            a = np.vstack((o,a))
+
+            # compute linear combination of current layer units
+            a = np.dot(a.T, W).T
+
+            # pass through activation
+            a = self.activation(a)
+
+            # get normalizer for this layer tuned to training data
+            normalizer = self.normalizers[c]
+            a = normalizer(a)
+            c+=1
+        return a
+    
+    # a copy of the batch normalized architecture that employs normalizers
+    # at each layer based on statistics from training data and user-chosen
+    # choice of weights w
+    def maxout_feature_transforms_testing(self,a, w):    
+        # loop through each layer matrix
+        c=0
+        for W1,W2 in w:
+            #  pad with ones (to compactly take care of bias) for next layer computation        
+            o = np.ones((1,np.shape(a)[1]))
+            a = np.vstack((o,a))
+
+            # compute linear combination of current layer units
+            a1 = np.dot(a.T, W1).T
+            a2 = np.dot(a.T, W2).T
+
+            # pass through activation
+            a = self.activation(a1,a2)
+
+            # get normalizer for this layer tuned to training data
+            normalizer = self.normalizers[c]
+            a = normalizer(a)
+            c+=1
+        return a

@@ -1,144 +1,100 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": 1,
-   "id": "a8a12ce6",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import autograd.numpy as np\n",
-    "import matplotlib.pyplot as plt\n",
-    "from matplotlib import gridspec\n",
-    "\n",
-    "class Setup:\n",
-    "    def __init__(self,train_cost_histories,train_count_histories,valid_cost_histories,valid_count_histories,start):\n",
-    "        # plotting colors\n",
-    "        self.colors = [[0,0.7,1],[1,0.8,0.5]]\n",
-    "\n",
-    "        # just plot cost history?\n",
-    "        if len(train_count_histories) == 0:\n",
-    "            self.plot_cost_histories(train_cost_histories,valid_cost_histories,start)\n",
-    "        else: # plot cost and count histories\n",
-    "            self.plot_cost_count_histories(train_cost_histories,train_count_histories,valid_cost_histories,valid_count_histories,start)\n",
-    " \n",
-    "    #### compare cost function histories ####\n",
-    "    def plot_cost_histories(self,train_cost_histories,valid_cost_histories,start):        \n",
-    "        # initialize figure\n",
-    "        fig = plt.figure(figsize = (10,3))\n",
-    "\n",
-    "        # create subplot with 1 panel\n",
-    "        gs = gridspec.GridSpec(1, 1) \n",
-    "        ax = plt.subplot(gs[0]); \n",
-    "\n",
-    "        # run through input histories, plotting each beginning at 'start' iteration\n",
-    "        for c in range(len(train_cost_histories)):\n",
-    "            train_history = train_cost_histories[c]\n",
-    "            \n",
-    "            # plot train cost function history\n",
-    "            ax.plot(np.arange(start,len(train_history),1),train_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[0],label = 'train cost') \n",
-    "            \n",
-    "            if np.size(valid_cost_histories) > 0:\n",
-    "                val_history = valid_cost_histories[c]\n",
-    "\n",
-    "                # plot test cost function history\n",
-    "                ax.plot(np.arange(start,len(val_history),1),val_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[1],label = 'test cost') \n",
-    "\n",
-    "        # clean up panel / axes labels\n",
-    "        xlabel = 'step $k$'\n",
-    "        ylabel = r'$g\\left(\\mathbf{w}^k\\right)$'\n",
-    "        ax.set_xlabel(xlabel,fontsize = 14)\n",
-    "        ax.set_ylabel(ylabel,fontsize = 14,rotation = 0,labelpad = 25)\n",
-    "        title = 'train vs validation cost histories'\n",
-    "        ax.set_title(title,fontsize = 18)\n",
-    "        \n",
-    "        # plot legend\n",
-    "        anchor = (1,1)\n",
-    "        plt.legend(loc='upper right', bbox_to_anchor=anchor)\n",
-    "        ax.set_xlim([start - 0.5,len(train_history) - 0.5]) \n",
-    "        plt.show()\n",
-    "        \n",
-    "    #### compare multiple histories of cost and misclassification counts ####\n",
-    "    def plot_cost_count_histories(self,train_cost_histories,train_count_histories,valid_cost_histories,valid_count_histories,start):        \n",
-    "        # initialize figure\n",
-    "        fig = plt.figure(figsize = (10,3))\n",
-    "\n",
-    "        # create subplot with 1 panel\n",
-    "        gs = gridspec.GridSpec(1, 2) \n",
-    "        ax1 = plt.subplot(gs[0]); \n",
-    "        ax2 = plt.subplot(gs[1]); \n",
-    "\n",
-    "        # run through input histories, plotting each beginning at 'start' iteration\n",
-    "        for c in range(len(train_cost_histories)):\n",
-    "            train_cost_history = train_cost_histories[c]\n",
-    "            train_count_history = train_count_histories[c]\n",
-    "            \n",
-    "            # check if a label exists, if so add it to the plot\n",
-    "            ax1.plot(np.arange(start,len(train_cost_history),1),train_cost_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[0]) \n",
-    "  \n",
-    "            ax2.plot(np.arange(start,len(train_count_history),1),train_count_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[0],label = 'train') \n",
-    "    \n",
-    "           # ax2.plot(train_count_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[0],label = 'train') \n",
-    "    \n",
-    "            if np.size(valid_cost_histories) > 0:\n",
-    "                valid_cost_history = valid_cost_histories[c]\n",
-    "                valid_count_history = valid_count_histories[c]\n",
-    "            \n",
-    "                ax1.plot(np.arange(start,len(valid_cost_history),1),valid_cost_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[1]) \n",
-    "\n",
-    "                ax2.plot(np.arange(start,len(valid_count_history),1),valid_count_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[1],label = 'validation') \n",
-    "            \n",
-    "        # clean up panel\n",
-    "        xlabel = 'step $k$'\n",
-    "        ylabel = r'$g\\left(\\mathbf{w}^k\\right)$'\n",
-    "        ax1.set_xlabel(xlabel,fontsize = 14)\n",
-    "        ax1.set_ylabel(ylabel,fontsize = 14,rotation = 0,labelpad = 25)\n",
-    "        title = 'cost history'\n",
-    "        ax1.set_title(title,fontsize = 15)\n",
-    "\n",
-    "        ylabel = 'misclassification'\n",
-    "        ax2.set_xlabel(xlabel,fontsize = 14)\n",
-    "        ax2.set_ylabel(ylabel,fontsize = 14,rotation = 90,labelpad = 10)\n",
-    "        title = 'misclassification history'\n",
-    "        ax2.set_title(title,fontsize = 15)\n",
-    "        \n",
-    "        anchor = (1,1)\n",
-    "        plt.legend(loc='upper right')# bbox_to_anchor=anchor)\n",
-    "        ax1.set_xlim([start - 0.5,len(train_cost_history) - 0.5])\n",
-    "        ax2.set_xlim([start - 0.5,len(train_cost_history) - 0.5])\n",
-    "        #ax2.set_ylim([0,1.05])\n",
-    "        plt.show()       \n",
-    "        "
-   ]
-  },
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "5c60f056",
-   "metadata": {},
-   "outputs": [],
-   "source": []
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.9.12"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+# import standard plotting and animation
+import autograd.numpy as np
+import matplotlib.pyplot as plt
+from matplotlib import gridspec
+
+class Setup:
+    def __init__(self,train_cost_histories,train_accuracy_histories,val_cost_histories,val_accuracy_histories,start):
+        # plotting colors
+        self.colors = [[0,0.7,1],[1,0.8,0.5]]
+
+        # just plot cost history?
+        if len(train_accuracy_histories) == 0:
+            self.plot_cost_histories(train_cost_histories,val_cost_histories,start)
+        else: # plot cost and count histories
+            self.plot_cost_count_histories(train_cost_histories,train_accuracy_histories,val_cost_histories,val_accuracy_histories,start)
+ 
+    #### compare cost function histories ####
+    def plot_cost_histories(self,train_cost_histories,val_cost_histories,start):        
+        # initialize figure
+        fig = plt.figure(figsize = (10,3))
+
+        # create subplot with 1 panel
+        gs = gridspec.GridSpec(1, 1) 
+        ax = plt.subplot(gs[0]); 
+
+        # run through input histories, plotting each beginning at 'start' iteration
+        for c in range(len(train_cost_histories)):
+            train_history = train_cost_histories[c]
+            val_history = val_cost_histories[c]
+
+            # plot train cost function history
+            ax.plot(np.arange(start,len(train_history),1),train_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[0],label = 'train cost') 
+            
+            if np.size(val_history) > 0:
+                # plot test cost function history
+                ax.plot(np.arange(start,len(val_history),1),val_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[1],label = 'validation cost') 
+
+        # clean up panel / axes labels
+        xlabel = 'step $k$'
+        ylabel =  r'$g\left({\mathbf{\Theta}}^k\right)$'
+        ax.set_xlabel(xlabel,fontsize = 14)
+        ax.set_ylabel(ylabel,fontsize = 14,rotation = 0,labelpad = 25)
+        title = 'train vs validation cost histories'
+        ax.set_title(title,fontsize = 18)
+        
+        # plot legend
+        anchor = (1,1)
+        plt.legend(loc='upper right', bbox_to_anchor=anchor)
+        ax.set_xlim([start - 0.5,len(train_history) - 0.5]) 
+        plt.show()
+        
+    #### compare multiple histories of cost and misclassification counts ####
+    def plot_cost_count_histories(self,train_cost_histories,train_accuracy_histories,val_cost_histories,val_accuracy_histories,start):        
+        # initialize figure
+        fig = plt.figure(figsize = (10,3))
+
+        # create subplot with 1 panel
+        gs = gridspec.GridSpec(1, 2) 
+        ax1 = plt.subplot(gs[0]); 
+        ax2 = plt.subplot(gs[1]); 
+
+        # run through input histories, plotting each beginning at 'start' iteration
+        for c in range(len(train_cost_histories)):
+            train_cost_history = train_cost_histories[c]
+            train_accuracy_history = train_accuracy_histories[c]
+
+            val_cost_history = val_cost_histories[c]
+            val_accuracy_history = val_accuracy_histories[c]
+            
+            # check if a label exists, if so add it to the plot
+            ax1.plot(np.arange(start,len(train_cost_history),1),train_cost_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[0]) 
+  
+            ax2.plot(np.arange(start,len(train_accuracy_history),1),train_accuracy_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[0],label = 'train') 
+    
+            if np.size(val_cost_history) > 0:
+                ax1.plot(np.arange(start,len(val_cost_history),1),val_cost_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[1]) 
+
+                ax2.plot(np.arange(start,len(val_accuracy_history),1),val_accuracy_history[start:],linewidth = 3*(0.8)**(c),color = self.colors[1],label = 'validation') 
+            
+        # clean up panel
+        xlabel = 'step $k$'
+        ylabel = r'$g\left({\mathbf{\Theta}}^k\right)$'
+        ax1.set_xlabel(xlabel,fontsize = 14)
+        ax1.set_ylabel(ylabel,fontsize = 14,rotation = 0,labelpad = 25)
+        title = 'cost history'
+        ax1.set_title(title,fontsize = 15)
+
+        ylabel = 'accuracy'
+        ax2.set_xlabel(xlabel,fontsize = 14)
+        ax2.set_ylabel(ylabel,fontsize = 14,rotation = 90,labelpad = 10)
+        title = 'accuracy history'
+        ax2.set_title(title,fontsize = 15)
+        
+        anchor = (1,1)
+        plt.legend(loc='lower right')# bbox_to_anchor=anchor)
+        ax1.set_xlim([start - 0.5,len(train_cost_history) - 0.5])
+        ax2.set_xlim([start - 0.5,len(train_cost_history) - 0.5])
+        ax2.set_ylim([0,1.05])
+        plt.show()       
+        

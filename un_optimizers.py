@@ -7,7 +7,7 @@ from timeit import default_timer as timer
 import time
 
 # minibatch gradient descent
-def gradient_descent(g,w,x_train,y_train,x_val,y_val,alpha,max_its,batch_size,**kwargs): 
+def gradient_descent(g,w,x_train,x_val,alpha,max_its,batch_size,**kwargs): 
     verbose = True
     if 'verbose' in kwargs:
         verbose = kwargs['verbose']
@@ -17,11 +17,11 @@ def gradient_descent(g,w,x_train,y_train,x_val,y_val,alpha,max_its,batch_size,**
     grad = value_and_grad(g_flat)
 
     # record history
-    num_train = y_train.size
-    num_val = y_val.size
+    num_train = x_train.shape[1]
+    num_val = x_val.shape[1]
     w_hist = [unflatten(w)]
-    train_hist = [g_flat(w,x_train,y_train,np.arange(num_train))]
-    val_hist = [g_flat(w,x_val,y_val,np.arange(num_val))]
+    train_hist = [g_flat(w,x_train,np.arange(num_train))]
+    val_hist = [g_flat(w,x_val,np.arange(num_val))]
 
     # how many mini-batches equal the entire dataset?
     num_batches = int(np.ceil(np.divide(num_train, batch_size)))
@@ -36,7 +36,7 @@ def gradient_descent(g,w,x_train,y_train,x_val,y_val,alpha,max_its,batch_size,**
             batch_inds = np.arange(b*batch_size, min((b+1)*batch_size, num_train))
             
             # plug in value into func and derivative
-            cost_eval,grad_eval = grad(w,x_train,y_train,batch_inds)
+            cost_eval,grad_eval = grad(w,x_train,batch_inds)
             grad_eval.shape = np.shape(w)
     
             # take descent step with momentum
@@ -45,8 +45,8 @@ def gradient_descent(g,w,x_train,y_train,x_val,y_val,alpha,max_its,batch_size,**
         end = timer()
         
         # update training and validation cost
-        train_cost = g_flat(w,x_train,y_train,np.arange(num_train))
-        val_cost = g_flat(w,x_val,y_val,np.arange(num_val))
+        train_cost = g_flat(w,x_train,np.arange(num_train))
+        val_cost = g_flat(w,x_val,np.arange(num_val))
 
         # record weight update, train and val costs
         w_hist.append(unflatten(w))

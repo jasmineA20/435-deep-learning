@@ -2,7 +2,17 @@ import autograd.numpy as np
 from inspect import signature
 
 class Setup:
-    def __init__(self,name,**kwargs):        
+    def __init__(self,name,x,y,feature_transforms,**kwargs):
+        # point to input/output for cost functions
+        self.x = x
+        self.y = y
+       
+        # make copy of feature transformation
+        self.feature_transforms = feature_transforms
+        
+        # count parameter layers of input to feature transform
+        self.sig = signature(self.feature_transforms)
+        
         ### make cost function choice ###
         # for regression
         if name == 'least_squares':
@@ -31,17 +41,10 @@ class Setup:
             self.feature_transforms = feature_transforms
             self.feature_transforms_2 = kwargs['feature_transforms_2']
             self.cost = self.autoencoder
+
             
-    ### insert feature transformations to use ###
-    def define_feature_transform(self,feature_transforms):
-        # make copy of feature transformation
-        self.feature_transforms = feature_transforms
-        
-        # count parameter layers of input to feature transform
-        self.sig = signature(self.feature_transforms)
-            
-    ##### models functions #####
-    # compute linear combination of features
+    ###### cost functions #####
+    # compute linear combination of input point
     def model(self,x,w):   
         # feature transformation - switch for dealing
         # with feature transforms that either do or do
@@ -52,69 +55,73 @@ class Setup:
         else: 
             f = self.feature_transforms(x)    
 
+        # tack a 1 onto the top of each input point all at once
+        o = np.ones((1,np.shape(f)[1]))
+        f = np.vstack((o,f))
+
         # compute linear combination and return
         # switch for dealing with feature transforms that either 
         # do or do not have internal parameters
         a = 0
         if len(self.sig.parameters) == 2:
-            a = w[1][0] + np.dot(f.T,w[1][1:])
+            a = np.dot(f.T,w[1])
         else:
-            a = w[0] + np.dot(f.T,w[1:])
+            a = np.dot(f.T,w)
         return a.T
-
+    
     ###### regression costs #######
     # an implementation of the least squares cost function for linear regression
-    def least_squares(self,w,x,y,iter):
+    def least_squares(self,w,iter):
         # get batch of points
-        x_p = x[:,iter]
-        y_p = y[:,iter]
-                
-        # compute cost over batch
+        x_p = self.x[:,iter]
+        y_p = self.y[:,iter]
+        
+        # compute cost
         cost = np.sum((self.model(x_p,w) - y_p)**2)
-        return cost/float(np.size(y_p))
+        return cost/float(np.size(x_p))
 
     # a compact least absolute deviations cost function
-    def least_absolute_deviations(self,w,x,y,iter):
+    def least_absolute_deviations(self,w,iter):
         # get batch of points
-        x_p = x[:,iter]
-        y_p = y[:,iter]
-
-        # compute cost over batch
+        x_p = self.x[:,iter]
+        y_p = self.y[:,iter]
+        
+        # compute cost
         cost = np.sum(np.abs(self.model(x_p,w) - y_p))
         return cost/float(np.size(y_p))
 
     ###### two-class classification costs #######
     # the convex softmax cost function
-    def softmax(self,w,x,y,iter):
+    def softmax(self,w,iter):
         # get batch of points
-        x_p = x[:,iter]
-        y_p = y[:,iter]
+        x_p = self.x[:,iter]
+        y_p = self.y[:,iter]
         
         # compute cost over batch
         cost = np.sum(np.log(1 + np.exp(-y_p*self.model(x_p,w))))
         return cost/float(np.size(y_p))
 
     # the convex relu cost function
-    def relu(self,w,x,y,iter):
+    def relu(self,w,iter):
         # get batch of points
-        x_p = x[:,iter]
-        y_p = y[:,iter]
+        x_p = self.x[:,iter]
+        y_p = self.y[:,iter]
         
         # compute cost over batch
         cost = np.sum(np.maximum(0,-y_p*self.model(x_p,w)))
         return cost/float(np.size(y_p))
-
+    
     # the counting cost function
-    def counting_cost(self,w,x,y):
-        cost = np.sum((np.sign(self.model(x,w)) - y)**2)
+    def counting_cost(self,w):
+        cost = np.sum((np.sign(self.model(self.x,w)) - self.y)**2)
         return 0.25*cost 
 
     ###### multiclass classification costs #######
     # multiclass perceptron
-    def multiclass_perceptron(self,w,x,y,iter):
+    def multiclass_perceptron(self,w,iter):
         # get subset of points
-        x_p = x[:,iter]
-        y_p = y[:,iter]
+        x_p = self.x[:,iter]
+        y_p = self.y[:,iter]
 
         # pre-compute predictions on all points
         all_evals = self.model(x_p,w)
@@ -130,10 +137,10 @@ class Setup:
         return cost/float(np.size(y_p))
 
     # multiclass softmax
-    def multiclass_softmax(self,w,x,y,iter):     
+    def multiclass_softmax(self,w,iter):     
         # get subset of points
-        x_p = x[:,iter]
-        y_p = y[:,iter]
+        x_p = self.x[:,iter]
+        y_p = self.y[:,iter]
         
         # pre-compute predictions on all points
         all_evals = self.model(x_p,w)
@@ -149,15 +156,51 @@ class Setup:
         return cost/float(np.size(y_p))
 
     # multiclass misclassification cost function - aka the fusion rule
-    def multiclass_counting_cost(self,w,x,y):                
+    def multiclass_counting_cost(self,w):                
         # pre-compute predictions on all points
-        all_evals = self.model(x,w)
+        all_evals = self.model(self.x,w)
 
         # compute predictions of each input point
         y_predict = (np.argmax(all_evals,axis = 0))[np.newaxis,:]
 
         # compare predicted label to actual label
-        count = np.sum(np.abs(np.sign(y - y_predict)))
+        count = np.sum(np.abs(np.sign(self.y - y_predict)))
 
         # return number of misclassifications
         return count
+    
+    ### for autoencoder ###
+    def encoder(self,x,w):    
+        # feature transformation 
+        f = self.feature_transforms(x,w[0])
+
+        # tack a 1 onto the top of each input point all at once
+        o = np.ones((1,np.shape(f)[1]))
+        f = np.vstack((o,f))
+
+        # compute linear combination and return
+        a = np.dot(f.T,w[1])
+        return a.T
+
+    def decoder(self,v,w):
+        # feature transformation 
+        f = self.feature_transforms_2(v,w[0])
+
+        # tack a 1 onto the top of each input point all at once
+        o = np.ones((1,np.shape(f)[1]))
+        f = np.vstack((o,f))
+
+        # compute linear combination and return
+        a = np.dot(f.T,w[1])
+        return a.T
+    
+    def autoencoder(self,w):
+        # encode input
+        a = self.encoder(self.x,w[0])
+        
+        # decode result
+        b = self.decoder(a,w[1])
+        
+        # compute Least Squares error
+        cost = np.sum((b - self.x)**2)
+        return cost/float(self.x.shape[1])

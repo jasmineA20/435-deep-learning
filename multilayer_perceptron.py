@@ -1,150 +1,116 @@
-{
- "cells": [
-  {
-   "cell_type": "code",
-   "execution_count": null,
-   "id": "c5594b03",
-   "metadata": {},
-   "outputs": [],
-   "source": [
-    "import autograd.numpy as np\n",
-    "\n",
-    "class Setup:\n",
-    "    def __init__(self,**kwargs):  \n",
-    "        # set default values for layer sizes, activation, and scale\n",
-    "        activation = 'relu'\n",
-    "\n",
-    "        # decide on these parameters via user input\n",
-    "        if 'activation' in kwargs:\n",
-    "            activation = kwargs['activation']\n",
-    "\n",
-    "        # switches\n",
-    "        if activation == 'linear':\n",
-    "            self.activation = lambda data: data\n",
-    "        elif activation == 'tanh':\n",
-    "            self.activation = lambda data: np.tanh(data)\n",
-    "        elif activation == 'relu':\n",
-    "            self.activation = lambda data: np.maximum(0,data)\n",
-    "        elif activation == 'sinc':\n",
-    "            self.activation = lambda data: np.sinc(data)\n",
-    "        elif activation == 'sin':\n",
-    "            self.activation = lambda data: np.sin(data)\n",
-    "        elif activation == 'maxout':\n",
-    "            self.activation = lambda data1,data2: np.maximum(data1,data2)\n",
-    "                        \n",
-    "        # get layer sizes\n",
-    "        layer_sizes = kwargs['layer_sizes']\n",
-    "        self.layer_sizes = layer_sizes\n",
-    "        self.scale = 0.1\n",
-    "        if 'scale' in kwargs:\n",
-    "            self.scale = kwargs['scale']\n",
-    "            \n",
-    "        # assign initializer / feature transforms function\n",
-    "        if activation == 'linear' or activation == 'tanh' or activation == 'relu' or activation == 'sinc' or activation == 'sin':\n",
-    "            self.initializer = self.standard_initializer\n",
-    "            self.feature_transforms = self.standard_feature_transforms\n",
-    "        elif activation == 'maxout':\n",
-    "            self.initializer = self.maxout_initializer\n",
-    "            self.feature_transforms = self.maxout_feature_transforms\n",
-    "\n",
-    "    ####### initializers ######\n",
-    "    # create initial weights for arbitrary feedforward network\n",
-    "    def standard_initializer(self):\n",
-    "        # container for entire weight tensor\n",
-    "        weights = []\n",
-    "\n",
-    "        # loop over desired layer sizes and create appropriately sized initial \n",
-    "        # weight matrix for each layer\n",
-    "        for k in range(len(self.layer_sizes)-1):\n",
-    "            # get layer sizes for current weight matrix\n",
-    "            U_k = self.layer_sizes[k]\n",
-    "            U_k_plus_1 = self.layer_sizes[k+1]\n",
-    "\n",
-    "            # make weight matrix\n",
-    "            weight = self.scale*np.random.randn(U_k+1,U_k_plus_1)\n",
-    "            weights.append(weight)\n",
-    "\n",
-    "        # re-express weights so that w_init[0] = omega_inner contains all \n",
-    "        # internal weight matrices, and w_init = w contains weights of \n",
-    "        # final linear combination in predict function\n",
-    "        w_init = [weights[:-1],weights[-1]]\n",
-    "\n",
-    "        return w_init\n",
-    "    \n",
-    "    # create initial weights for arbitrary feedforward network\n",
-    "    def maxout_initializer(self):\n",
-    "        # container for entire weight tensor\n",
-    "        weights = []\n",
-    "\n",
-    "        # loop over desired layer sizes and create appropriately sized initial \n",
-    "        # weight matrix for each layer\n",
-    "        for k in range(len(self.layer_sizes)-1):\n",
-    "            # get layer sizes for current weight matrix\n",
-    "            U_k = self.layer_sizes[k]\n",
-    "            U_k_plus_1 = self.layer_sizes[k+1]\n",
-    "\n",
-    "            # make weight matrix\n",
-    "            weight1 = self.scale*np.random.randn(U_k + 1,U_k_plus_1)\n",
-    "\n",
-    "            # add second matrix for inner weights\n",
-    "            if k < len(self.layer_sizes)-2:\n",
-    "                weight2 = self.scale*np.random.randn(U_k + 1,U_k_plus_1)\n",
-    "                weights.append([weight1,weight2])\n",
-    "            else:\n",
-    "                weights.append(weight1)\n",
-    "\n",
-    "        # re-express weights so that w_init[0] = omega_inner contains all \n",
-    "        # internal weight matrices, and w_init = w contains weights of \n",
-    "        # final linear combination in predict function\n",
-    "        w_init = [weights[:-1],weights[-1]]\n",
-    "\n",
-    "        return w_init\n",
-    "\n",
-    "    ####### feature transforms ######\n",
-    "    # fully evaluate our network features using the tensor of weights in w\n",
-    "    def standard_feature_transforms(self,a, w):    \n",
-    "        # loop through each layer matrix\n",
-    "        for W in w:\n",
-    "            # compute inner product with current layer weights\n",
-    "            a = W[0] + np.dot(a.T, W[1:])\n",
-    "\n",
-    "            # output of layer activation\n",
-    "            a = self.activation(a).T\n",
-    "        return a\n",
-    "    \n",
-    "    # fully evaluate our network features using the tensor of weights in w\n",
-    "    def maxout_feature_transforms(self,a, w):    \n",
-    "        # loop through each layer matrix\n",
-    "        for W1,W2 in w:\n",
-    "            # compute inner product with current layer weights\n",
-    "            a1 = W1[0][:,np.newaxis] + np.dot(a.T, W1[1:]).T\n",
-    "            a2 = W2[0][:,np.newaxis] + np.dot(a.T, W2[1:]).T\n",
-    "\n",
-    "            # output of layer activation\n",
-    "            a = self.activation(a1,a2)\n",
-    "        return a"
-   ]
-  }
- ],
- "metadata": {
-  "kernelspec": {
-   "display_name": "Python 3 (ipykernel)",
-   "language": "python",
-   "name": "python3"
-  },
-  "language_info": {
-   "codemirror_mode": {
-    "name": "ipython",
-    "version": 3
-   },
-   "file_extension": ".py",
-   "mimetype": "text/x-python",
-   "name": "python",
-   "nbconvert_exporter": "python",
-   "pygments_lexer": "ipython3",
-   "version": "3.9.12"
-  }
- },
- "nbformat": 4,
- "nbformat_minor": 5
-}
+import autograd.numpy as np
+
+class Setup:
+    def __init__(self,**kwargs):  
+        # set default values for layer sizes, activation, and scale
+        activation = 'relu'
+
+        # decide on these parameters via user input
+        if 'activation' in kwargs:
+            activation = kwargs['activation']
+
+        # switches
+        if activation == 'linear':
+            self.activation = lambda data: data
+        elif activation == 'tanh':
+            self.activation = lambda data: np.tanh(data)
+        elif activation == 'relu':
+            self.activation = lambda data: np.maximum(0,data)
+        elif activation == 'sinc':
+            self.activation = lambda data: np.sinc(data)
+        elif activation == 'sin':
+            self.activation = lambda data: np.sin(data)
+        elif activation == 'maxout':
+            self.activation = lambda data1,data2: np.maximum(data1,data2)
+                        
+        # get layer sizes
+        layer_sizes = kwargs['layer_sizes']
+        self.layer_sizes = layer_sizes
+        self.scale = 0.1
+        if 'scale' in kwargs:
+            self.scale = kwargs['scale']
+            
+        # assign initializer / feature transforms function
+        if activation == 'linear' or activation == 'tanh' or activation == 'relu' or activation == 'sinc' or activation == 'sin':
+            self.initializer = self.standard_initializer
+            self.feature_transforms = self.standard_feature_transforms
+        elif activation == 'maxout':
+            self.initializer = self.maxout_initializer
+            self.feature_transforms = self.maxout_feature_transforms
+
+    ####### initializers ######
+    # create initial weights for arbitrary feedforward network
+    def standard_initializer(self):
+        # container for entire weight tensor
+        weights = []
+
+        # loop over desired layer sizes and create appropriately sized initial 
+        # weight matrix for each layer
+        for k in range(len(self.layer_sizes)-1):
+            # get layer sizes for current weight matrix
+            U_k = self.layer_sizes[k]
+            U_k_plus_1 = self.layer_sizes[k+1]
+
+            # make weight matrix
+            weight = self.scale*np.random.randn(U_k+1,U_k_plus_1)
+            weights.append(weight)
+
+        # re-express weights so that w_init[0] = omega_inner contains all 
+        # internal weight matrices, and w_init = w contains weights of 
+        # final linear combination in predict function
+        w_init = [weights[:-1],weights[-1]]
+
+        return w_init
+    
+    # create initial weights for arbitrary feedforward network
+    def maxout_initializer(self):
+        # container for entire weight tensor
+        weights = []
+
+        # loop over desired layer sizes and create appropriately sized initial 
+        # weight matrix for each layer
+        for k in range(len(self.layer_sizes)-1):
+            # get layer sizes for current weight matrix
+            U_k = self.layer_sizes[k]
+            U_k_plus_1 = self.layer_sizes[k+1]
+
+            # make weight matrix
+            weight1 = self.scale*np.random.randn(U_k + 1,U_k_plus_1)
+
+            # add second matrix for inner weights
+            if k < len(self.layer_sizes)-2:
+                weight2 = self.scale*np.random.randn(U_k + 1,U_k_plus_1)
+                weights.append([weight1,weight2])
+            else:
+                weights.append(weight1)
+
+        # re-express weights so that w_init[0] = omega_inner contains all 
+        # internal weight matrices, and w_init = w contains weights of 
+        # final linear combination in predict function
+        w_init = [weights[:-1],weights[-1]]
+
+        return w_init
+
+    ####### feature transforms ######
+    # fully evaluate our network features using the tensor of weights in w
+    def standard_feature_transforms(self,a, w):    
+        # loop through each layer matrix
+        for W in w:
+            # compute inner product with current layer weights
+            a = W[0] + np.dot(a.T, W[1:])
+
+            # output of layer activation
+            a = self.activation(a).T
+        return a
+    
+    # fully evaluate our network features using the tensor of weights in w
+    def maxout_feature_transforms(self,a, w):    
+        # loop through each layer matrix
+        for W1,W2 in w:
+            # compute inner product with current layer weights
+            a1 = W1[0][:,np.newaxis] + np.dot(a.T, W1[1:]).T
+            a2 = W2[0][:,np.newaxis] + np.dot(a.T, W2[1:]).T
+
+            # output of layer activation
+            a = self.activation(a1,a2)
+        return a
